@@ -119,15 +119,31 @@ def get_verified_public_key():
     assert_true(isinstance(k,rsa.RSAPublicKey) and k.key_size==3072,'HOLD_OTA_PUBLIC_KEY_NOT_RSA3072')
     return k
 
-def sign(body:dict,pub:rsa.RSAPublicKey)->bytes:
-    pem=os.environ.get('PF01_OTA_ENCRYPTED_PEM','').encode('ascii')
-    password=os.environ.get('PF01_OTA_PEM_PASSWORD','').encode('utf-8')
-    assert_true(pem.startswith(b'-----BEGIN ENCRYPTED PRIVATE KEY-----') and password,
-                'HOLD_ENCRYPTED_OTA_KEY_ENVIRONMENT_SECRET_MISSING')
-    key=serialization.load_pem_private_key(pem,password=password)
-    assert_true(isinstance(key,rsa.RSAPrivateKey) and key.key_size==3072 and
-                key.public_key().public_numbers()==pub.public_numbers(),
+def validate_existing_ota_key(pub:rsa.RSAPublicKey)->rsa.RSAPrivateKey:
+    # Only known-safe diagnostic categories may reach GitHub Actions logs.
+    # Never print exception details, key material, passwords or token values.
+    pem_text=os.environ.get('PF01_OTA_ENCRYPTED_PEM','')
+    password_text=os.environ.get('PF01_OTA_PEM_PASSWORD','')
+    assert_true(bool(pem_text) and bool(password_text),
+                'HOLD_OTA_KEY_OR_PASSWORD_ENVIRONMENT_SECRET_MISSING')
+    assert_true(pem_text.strip().startswith('-----BEGIN ENCRYPTED PRIVATE KEY-----') and
+                pem_text.strip().endswith('-----END ENCRYPTED PRIVATE KEY-----'),
+                'HOLD_OTA_PEM_SECRET_NOT_ENCRYPTED_PKCS8')
+    try:
+        pem=pem_text.encode('ascii')
+        password=password_text.encode('utf-8')
+        key=serialization.load_pem_private_key(pem,password=password)
+    except Exception:
+        raise ValueError('HOLD_OTA_PEM_DECRYPT_OR_ENCODING_INVALID') from None
+    assert_true(isinstance(key,rsa.RSAPrivateKey) and key.key_size==3072,
+                'HOLD_OTA_PEM_NOT_RSA3072')
+    assert_true(key.public_key().public_numbers()==pub.public_numbers(),
                 'HOLD_OTA_PRIVATE_KEY_NOT_MATCHING_V13_APK')
+    return key
+
+
+def sign(body:dict,pub:rsa.RSAPublicKey)->bytes:
+    key=validate_existing_ota_key(pub)
     msg=compact_body(body)
     signature=key.sign(msg,padding.PSS(mgf=padding.MGF1(hashes.SHA256()),salt_length=32),hashes.SHA256())
     pub.verify(signature,msg,padding.PSS(mgf=padding.MGF1(hashes.SHA256()),salt_length=32),hashes.SHA256())
@@ -156,12 +172,25 @@ def main():
     p.add_argument('--approve-run-id',type=int,required=True)
     p.add_argument('--approve-bundle-sha',required=True)
     p.add_argument('--approve-source-digest',required=True)
+    p.add_argument('--action',choices=('DIAGNOSE_NO_SIGN_NO_PUBLISH','PUBLISH_SIGNED_PF01_16_0_3'),required=True)
     a=p.parse_args()
+    stage='OWNER'
     try:
         assert_true(os.environ.get('GITHUB_ACTOR')=='parksu9308','HOLD_DISPATCH_ACTOR_NOT_OWNER')
+        stage='REVIEW_ARTIFACT'
         body,report,zip_bytes=verify_release(a.unsigned_dir,a.approve_run_id,a.approve_bundle_sha,a.approve_source_digest)
+        stage='PUBLISHER_PIN'
         pub=get_verified_public_key()
+        stage='EXISTING_KEY_PREFLIGHT'
+        validate_existing_ota_key(pub)
+        if a.action=='DIAGNOSE_NO_SIGN_NO_PUBLISH':
+            # This branch MUST NOT sign, publish, change repository files, or read GITHUB_TOKEN.
+            print('DIAGNOSTIC_PASS_NO_SIGN_NO_PUBLISH')
+            print('PREFLIGHT_PRIVATE_ARTIFACT_PUBLIC_PIN_EXISTING_KEY_PASS')
+            return 0
+        stage='SIGN_ONLY'
         signed=sign(body,pub)
+        stage='PUBLICATION'
         token=os.environ.get('PF01_PUBLIC_REPO_TOKEN','')
         assert_true(bool(token),'HOLD_PUBLIC_REPO_WRITE_TOKEN_MISSING')
         result=publish_new_only(token,body,signed,zip_bytes)
@@ -173,7 +202,7 @@ def main():
         return 0
     except Exception as e:
         # Never expose exception details from cryptography passwords/tokens to Actions log.
-        typ = str(e) if isinstance(e,ValueError) and str(e).startswith('HOLD_') else 'HOLD_CLOUD_SIGN_OR_PUBLISH_UNVERIFIED'
+        typ = str(e) if isinstance(e,ValueError) and str(e).startswith('HOLD_') else 'HOLD_'+stage+'_UNVERIFIED'
         print(typ,file=sys.stderr)
         return 2
 if __name__=='__main__':raise SystemExit(main())
