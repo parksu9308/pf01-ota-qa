@@ -21,6 +21,7 @@ on:
         required: true
         options:
           - HOLD
+          - DIAGNOSE_NO_SIGN_NO_PUBLISH
           - PUBLISH_SIGNED_PF01_16_0_3
 
 permissions:
@@ -36,7 +37,8 @@ jobs:
     if: >-
       github.ref == 'refs/heads/main' &&
       github.actor == 'parksu9308' &&
-      inputs.approve_action == 'PUBLISH_SIGNED_PF01_16_0_3'
+      (inputs.approve_action == 'DIAGNOSE_NO_SIGN_NO_PUBLISH' ||
+       inputs.approve_action == 'PUBLISH_SIGNED_PF01_16_0_3')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment:
@@ -61,6 +63,7 @@ jobs:
       - name: Revalidate approved bundle/source digests, signed publisher key and publish NEW version only
         shell: bash
         env:
+          APPROVE_ACTION: ${{ inputs.approve_action }}
           APPROVE_RUN_ID: ${{ inputs.prepare_run_id }}
           APPROVE_BUNDLE_SHA256: ${{ inputs.approve_bundle_sha256 }}
           APPROVE_SOURCE_DIGEST: ${{ inputs.approve_source_digest }}
@@ -74,4 +77,5 @@ jobs:
             --unsigned-dir "$RUNNER_TEMP/unsigned-review" \
             --approve-run-id "$APPROVE_RUN_ID" \
             --approve-bundle-sha "$APPROVE_BUNDLE_SHA256" \
-            --approve-source-digest "$APPROVE_SOURCE_DIGEST"
+            --approve-source-digest "$APPROVE_SOURCE_DIGEST" \
+            --action "$APPROVE_ACTION"
