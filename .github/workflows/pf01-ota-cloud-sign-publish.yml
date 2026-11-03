@@ -1,0 +1,77 @@
+name: PF01 OTA 16.0.3 - APPROVE SIGN PUBLISH
+
+on:
+  workflow_dispatch:
+    inputs:
+      prepare_run_id:
+        description: 'Successful PRIVATE PF01 unsigned prepare run ID (review its SHA first)'
+        required: true
+        type: string
+      approve_bundle_sha256:
+        description: 'Exactly 64 hex chars shown in PRIVATE build review summary'
+        required: true
+        type: string
+      approve_source_digest:
+        description: 'Exactly 64 hex chars shown in PRIVATE build review summary'
+        required: true
+        type: string
+      approve_action:
+        description: 'Exact explicit publish consent'
+        type: choice
+        required: true
+        options:
+          - HOLD
+          - PUBLISH_SIGNED_PF01_16_0_3
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: pf01-ota-16-0-3-publish
+  cancel-in-progress: false
+
+jobs:
+  sign_publish:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.actor == 'parksu9308' &&
+      inputs.approve_action == 'PUBLISH_SIGNED_PF01_16_0_3'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: ota-qa-sign
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install crypto verifier
+        run: python -m pip install --disable-pip-version-check 'cryptography==46.0.3'
+      - name: Download one PRIVATE, reviewed, unsigned artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pf01-ota-16.0.3-unsigned
+          repository: parksu9308/TaiRmasterPG
+          run-id: ${{ inputs.prepare_run_id }}
+          github-token: ${{ secrets.PF01_PRIVATE_ACTIONS_READ_PAT }}
+          path: ${{ runner.temp }}/unsigned-review
+      - name: Revalidate approved bundle/source digests, signed publisher key and publish NEW version only
+        shell: bash
+        env:
+          APPROVE_RUN_ID: ${{ inputs.prepare_run_id }}
+          APPROVE_BUNDLE_SHA256: ${{ inputs.approve_bundle_sha256 }}
+          APPROVE_SOURCE_DIGEST: ${{ inputs.approve_source_digest }}
+          PF01_PRIVATE_READ_PAT: ${{ secrets.PF01_PRIVATE_ACTIONS_READ_PAT }}
+          PF01_OTA_ENCRYPTED_PEM: ${{ secrets.PF01_OTA_ENCRYPTED_PEM }}
+          PF01_OTA_PEM_PASSWORD: ${{ secrets.PF01_OTA_PEM_PASSWORD }}
+          PF01_PUBLIC_REPO_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python .github/pf01-ota/verify_sign_publish.py \
+            --unsigned-dir "$RUNNER_TEMP/unsigned-review" \
+            --approve-run-id "$APPROVE_RUN_ID" \
+            --approve-bundle-sha "$APPROVE_BUNDLE_SHA256" \
+            --approve-source-digest "$APPROVE_SOURCE_DIGEST"
