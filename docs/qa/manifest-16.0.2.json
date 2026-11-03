@@ -1,0 +1,11 @@
+{
+  "schema": "PF01_R16_OTA_MANIFEST_V1",
+  "appId": "app.tairmasterpg.pf01.qa.alpha.r2",
+  "nativeCompat": "PF01_R16_CAPACITOR8_CAPGO8_SQLITE8_QA_R2_V1",
+  "minNativeCode": 8,
+  "version": "16.0.2",
+  "bundleUrl": "https://parksu9308.github.io/pf01-ota-qa/qa/16.0.2.zip",
+  "bundleSha256": "842a6655f25ba31f8ab289506fcc39c5274e37bb3ce85cc6f36d43e642ae92d1",
+  "publisher": "PF01_OTA_QA",
+  "signature": "nI8BtQmdmrUoYOw9NuytnHEHq+YXQGdcoO1NzsPnPBvz9pqlrBfDYVCtISaH3/tgAczLuRiloKQid7nj3erL7zq62AIuSDkP70Pl2JOyzKuwx+g7wOYpvyxL9ELaWLsF1MVqHQGTQQfShz8zW6HCHt204T8KOcCRnJTDC1LRT0qTfFP6MOu4LeZjTXly0vyOrtQMcQWAptdtWFEpaOgtBajOF2xZHn8JI+SQeCX2jSQ3PnhRxTeUPI4ijCjLcQpCc6djR+J7H+fOBLECpnyVwaICIYKYUMpwySJ6uXtpqSHuEcyT2AjT6ml2d5hiMDHtYJSJ3r6nRNLDKMdOb38DOpcysRQRRywBVyw6G5apx0N28UPjWqX0Bx6brx0M2BOs+p/e40PqV+lGa74hl9FQIf19G+QdarYk7zQQnYSwgaNdIO59T+aDv6Mymmu6rDzdBo/IwHFSDkdBt0VMoDWEu68uO1Q5QXh8JvhP2aCAIJwd27UYUathKcRgb7NTAfyf"
+}
